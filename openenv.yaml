@@ -1,0 +1,34 @@
+name: IndiaShield-v1
+version: "1.0.0"
+description: >
+  A reinforcement learning environment where an agent contains
+  WhatsApp misinformation outbreaks in India while simultaneously
+  compressing a multilingual MuRIL classifier for deployment on
+  low-RAM Indian devices.
+tags:
+  - openenv
+  - india
+  - misinformation
+  - model-compression
+  - hinglish
+  - pytorch
+  - meta
+tasks:
+  - id: task1
+    name: Diwali Cracker Rumour
+    difficulty: easy
+  - id: task2
+    name: Election EVM Story
+    difficulty: medium
+  - id: task3
+    name: Hospital Poison Campaign
+    difficulty: hard
+  - id: task4
+    name: IPL Match Fixing Rumour
+    difficulty: very_hard
+  - id: task5
+    name: Religious Violence Incitement
+    difficulty: expert
+action_space: discrete
+observation_space: structured
+reward_range: [-1.0, 1.0]
