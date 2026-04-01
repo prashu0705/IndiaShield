@@ -1,0 +1,48 @@
+{
+  "model": "test",
+  "results": [
+    {
+      "task_id": "task1",
+      "final_score": 0.12,
+      "passed": false,
+      "total_reward": -5.9,
+      "breakdown": {
+        "containment": 0.1,
+        "compression": 0.339,
+        "deployment": 0.0,
+        "source_detection": 0.0
+      },
+      "feedback": "Too many infected (90 > 5) | Model too large (236.0mb > 80.0mb) | Not enough nodes protected (0 < 10)"
+    },
+    {
+      "task_id": "task2",
+      "final_score": 0.526,
+      "passed": false,
+      "total_reward": -4.148,
+      "breakdown": {
+        "containment": 0.8,
+        "compression": 0.179,
+        "accuracy": 1.0,
+        "deployment": 0.0,
+        "source_detection": 0.0,
+        "accuracy_penalty": 0.0
+      },
+      "feedback": "Too many infected (60)"
+    },
+    {
+      "task_id": "task3",
+      "final_score": 0.0,
+      "passed": false,
+      "total_reward": -12.0,
+      "breakdown": {
+        "source_detection": 0.0,
+        "containment": 0.0,
+        "compression": 0.0,
+        "accuracy": 0.0,
+        "deployment": 0.0
+      },
+      "feedback": "Not all sources found (0/3). Score capped at 0.3."
+    }
+  ],
+  "average_score": 0.215
+}
