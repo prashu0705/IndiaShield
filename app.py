@@ -1,3 +1,5 @@
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -20,6 +22,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+@app.get("/demo", include_in_schema=False)
+def demo():
+    return FileResponse("demo.html")
 
 app.add_middleware(
     CORSMiddleware,
