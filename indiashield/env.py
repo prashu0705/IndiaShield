@@ -57,7 +57,9 @@ class EpisodeStats(BaseModel):
     duration_seconds: float
 
 
-class IndiaShieldEnv:
+from openenv.env import Env
+
+class IndiaShieldEnv(Env):
 
     def __init__(
         self,
@@ -78,6 +80,34 @@ class IndiaShieldEnv:
         self.total_reward: float = 0.0
         self.episode_id: str = self._make_episode_id()
         self.created_at: float = time.time()
+        self.name = "IndiaShield-v1"
+        self.state_space = {
+            "infected": "int",
+            "clean": "int", 
+            "blocked": "int",
+            "model_size_mb": "float",
+            "hindi_accuracy": "float",
+            "english_accuracy": "float",
+            "tamil_accuracy": "float",
+            "telugu_accuracy": "float",
+            "nodes_protected": "int",
+            "sources_found": "int",
+            "turn": "int"
+        }
+        self.action_space = {
+            "type": ["intercept", "quarantine", "identify_spreader",
+                     "add_forward_label", "quantize", "prune",
+                     "distill", "deploy", "noop"],
+            "node_id": "int (optional)",
+            "group_id": "int (optional)",
+            "precision": ["int8", "int4"],
+            "target_layer": ["attention", "ffn", "all"],
+            "percentage": "int 0-70",
+            "student_size": ["small", "tiny"]
+        }
+        self.episode_max_length = self.custom_config.get(
+            "max_turns", 20
+        )
         self.reset()
 
     def _make_episode_id(self) -> str:
