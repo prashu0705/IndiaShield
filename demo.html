@@ -494,7 +494,9 @@
 </div>
 
 <script>
-const API = 'http://localhost:7860'
+const API = window.location.hostname === 'localhost' 
+  ? 'http://localhost:7860' 
+  : 'https://prashansab-indiashield.hf.space'
 const SESSION = 'demo_' + Math.random().toString(36).slice(2, 8)
 
 let selectedTask = 'task1'
