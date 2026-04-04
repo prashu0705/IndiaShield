@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IndiaShield — WhatsApp Misinfo Containment</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0a0a0a;
+    color: #e8e8e8;
+    min-height: 100vh;
+  }
+
+  header {
+    padding: 1rem 2rem;
+    border-bottom: 1px solid #222;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #111;
+  }
+
+  .logo {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #fff;
+  }
+
+  .logo span { color: #25D366; }
+
+  .badge {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: #1a1a2e;
+    color: #7c83ff;
+    border: 1px solid #7c83ff44;
+  }
+
+  .main {
+    display: grid;
+    grid-template-columns: 320px 1fr 280px;
+    height: calc(100vh - 57px);
+    overflow: hidden;
+  }
+
+  .panel {
+    border-right: 1px solid #1e1e1e;
+    overflow-y: auto;
+    padding: 1.25rem;
+  }
+
+  .panel:last-child { border-right: none; border-left: 1px solid #1e1e1e; }
+
+  .panel-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #666;
+    margin-bottom: 1rem;
+  }
+
+  .task-card {
+    border: 1px solid #222;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    background: #111;
+  }
+
+  .task-card:hover { border-color: #444; background: #161616; }
+  .task-card.active { border-color: #25D366; background: #0d1f14; }
+
+  .task-name { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+  .task-meta { font-size: 11px; color: #555; }
+
+  .diff-badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-bottom: 6px;
+  }
+
+  .easy { background: #0d2b1a; color: #25D366; }
+  .medium { background: #2b1e0a; color: #f59e0b; }
+  .hard { background: #2b0a0a; color: #ef4444; }
+  .very_hard { background: #1a0a2b; color: #a855f7; }
+  .expert { background: #1a0a0a; color: #ff6b6b; }
+
+  .btn {
+    width: 100%;
+    padding: 0.6rem 1rem;
+    border-radius: 6px;
+    border: none;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-bottom: 8px;
+  }
+
+  .btn-green { background: #25D366; color: #000; }
+  .btn-green:hover { background: #1db954; }
+  .btn-outline {
+    background: transparent;
+    color: #888;
+    border: 1px solid #333;
+  }
+  .btn-outline:hover { border-color: #555; color: #ccc; }
+  .btn-action {
+    background: #161616;
+    color: #ccc;
+    border: 1px solid #2a2a2a;
+    text-align: left;
+    font-size: 12px;
+    padding: 0.5rem 0.75rem;
+  }
+  .btn-action:hover { border-color: #444; color: #fff; }
+  .btn-action.selected { border-color: #25D366; color: #25D366; background: #0d1f14; }
+
+  .canvas-wrap {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: #0d0d0d;
+    overflow: hidden;
+  }
+
+  canvas { display: block; }
+
+  .overlay {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .pill {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: #111;
+    border: 1px solid #222;
+  }
+
+  .pill-red { border-color: #ef444455; color: #ef4444; background: #1a0a0a; }
+  .pill-green { border-color: #25D36655; color: #25D366; background: #0d1f14; }
+  .pill-grey { border-color: #33333355; color: #666; background: #111; }
+
+  .story-box {
+    background: #111;
+    border: 1px solid #1e1e1e;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-size: 12px;
+    color: #777;
+    line-height: 1.6;
+    margin-bottom: 1rem;
+    font-style: italic;
+  }
+
+  .metric {
+    background: #111;
+    border: 1px solid #1e1e1e;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 8px;
+  }
+
+  .metric-label {
+    font-size: 11px;
+    color: #555;
+    margin-bottom: 4px;
+  }
+
+  .metric-value {
+    font-size: 20px;
+    font-weight: 600;
+    color: #fff;
+    transition: color 0.3s;
+  }
+
+  .metric-sub {
+    font-size: 11px;
+    color: #555;
+    margin-top: 2px;
+  }
+
+  .progress-bar {
+    height: 4px;
+    background: #1e1e1e;
+    border-radius: 2px;
+    margin-top: 6px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.4s ease, background 0.4s ease;
+  }
+
+  .log-entry {
+    font-size: 11px;
+    padding: 4px 0;
+    border-bottom: 1px solid #161616;
+    color: #666;
+    line-height: 1.5;
+  }
+
+  .log-entry span { color: #25D366; }
+  .log-entry.bad span { color: #ef4444; }
+  .log-entry.error span { color: #f59e0b; }
+
+  .action-params { margin-top: 8px; display: none; }
+  .action-params.show { display: block; }
+
+  input[type=number] {
+    width: 100%;
+    background: #161616;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 0.4rem 0.75rem;
+    color: #ccc;
+    font-size: 13px;
+    margin-top: 4px;
+  }
+
+  select {
+    width: 100%;
+    background: #161616;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 0.4rem 0.75rem;
+    color: #ccc;
+    font-size: 13px;
+    margin-top: 4px;
+  }
+
+  label { font-size: 11px; color: #666; }
+
+  .section { margin-bottom: 1.25rem; }
+
+  .legend {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: #666;
+  }
+
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  .turn-bar {
+    position: absolute;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 12px;
+    color: #666;
+  }
+
+  .start-screen {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 1rem;
+    color: #333;
+  }
+
+  .start-screen h2 { font-size: 1.5rem; color: #444; font-weight: 400; }
+  .start-screen p { font-size: 13px; color: #333; }
+
+  .done-banner {
+    background: #0d1f14;
+    border: 1px solid #25D36644;
+    border-radius: 8px;
+    padding: 1rem;
+    text-align: center;
+    margin-bottom: 1rem;
+    display: none;
+  }
+
+  .done-banner.show { display: block; }
+  .done-banner h3 { color: #25D366; margin-bottom: 4px; }
+  .done-banner.failed h3 { color: #ef4444; }
+  .done-banner p { font-size: 12px; color: #666; }
+
+  .deploy-hint {
+    font-size: 11px;
+    color: #f59e0b;
+    background: #1a140a;
+    border: 1px solid #f59e0b33;
+    border-radius: 6px;
+    padding: 6px 10px;
+    margin-top: 6px;
+    display: none;
+  }
+
+  .deploy-hint.show { display: block; }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">India<span>Shield</span> <span style="color:#666;font-weight:400;font-size:0.9rem;">v1.0</span></div>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <span class="badge">OpenEnv Hackathon</span>
+    <span class="badge" style="color:#25D366;border-color:#25D36644;">Meta × HuggingFace</span>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- LEFT PANEL -->
+  <div class="panel">
+    <div class="section">
+      <div class="panel-title">Select Task</div>
+      <div id="task-list"></div>
+    </div>
+
+    <div class="section">
+      <button class="btn btn-green" id="start-btn" onclick="startEpisode()">▶ Start Episode</button>
+      <button class="btn btn-outline" onclick="resetEpisode()">↺ Reset</button>
+    </div>
+
+    <div class="section">
+      <div class="panel-title">Take Action</div>
+      <div id="action-list"></div>
+
+      <div class="action-params" id="params-node">
+        <label>Node ID</label>
+        <input type="number" id="input-node-id" min="0" value="0">
+      </div>
+      <div class="action-params" id="params-group">
+        <label>Group ID</label>
+        <input type="number" id="input-group-id" min="0" value="0">
+      </div>
+      <div class="action-params" id="params-precision">
+        <label>Precision</label>
+        <select id="input-precision">
+          <option value="int8">int8 — safe (55% shrink)</option>
+          <option value="int4">int4 — aggressive (72% shrink)</option>
+        </select>
+      </div>
+      <div class="action-params" id="params-prune">
+        <label>Target Layer</label>
+        <select id="input-layer">
+          <option value="ffn">FFN — balanced</option>
+          <option value="attention">Attention — hurts Hindi</option>
+          <option value="all">All — aggressive</option>
+        </select>
+        <label style="margin-top:6px;display:block;">Percentage</label>
+        <input type="number" id="input-percentage" min="10" max="70" value="30">
+      </div>
+      <div class="action-params" id="params-distill">
+        <label>Student Size</label>
+        <select id="input-student">
+          <option value="small">Small — 2 turns, 65% shrink</option>
+          <option value="tiny">Tiny — 3 turns, 82% shrink</option>
+        </select>
+      </div>
+
+      <div class="deploy-hint" id="deploy-hint">
+        Model is still too large to deploy. Use Quantize or Prune first to get below the target size.
+      </div>
+
+      <button class="btn btn-green" style="margin-top:10px;" onclick="takeAction()">
+        → Execute Action
+      </button>
+    </div>
+
+    <div class="section">
+      <div class="panel-title">Action Log</div>
+      <div id="action-log"></div>
+    </div>
+  </div>
+
+  <!-- MIDDLE — NETWORK CANVAS -->
+  <div class="canvas-wrap" id="canvas-wrap">
+    <canvas id="network-canvas"></canvas>
+    <div class="overlay">
+      <div class="pill pill-red" id="pill-infected">Infected: —</div>
+      <div class="pill pill-green" id="pill-clean">Clean: —</div>
+      <div class="pill pill-grey" id="pill-blocked">Blocked: —</div>
+      <div class="pill" id="pill-turn" style="color:#888;">Turn: —</div>
+    </div>
+    <div class="turn-bar" id="turn-bar">Select a task and start an episode</div>
+    <div class="start-screen" id="start-screen">
+      <h2>IndiaShield</h2>
+      <p>Select a task on the left and click Start Episode</p>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="panel">
+    <div class="panel-title">Episode Status</div>
+
+    <div class="done-banner" id="done-banner">
+      <h3 id="done-title">Episode Complete</h3>
+      <div style="font-size:2rem;font-weight:700;color:#25D366;margin:6px 0;" id="done-score"></div>
+      <p id="done-msg">Click Reset to play again</p>
+    </div>
+
+    <div class="story-box" id="story-box">
+      Select a task to see the scenario.
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="dot" style="background:#ef4444"></div>Infected</div>
+      <div class="legend-item"><div class="dot" style="background:#25D366"></div>Clean</div>
+      <div class="legend-item"><div class="dot" style="background:#444"></div>Blocked</div>
+      <div class="legend-item"><div class="dot" style="background:#f59e0b;border-radius:2px;width:10px;height:10px;"></div>Super spreader</div>
+      <div class="legend-item"><div class="dot" style="background:#7c83ff;border-radius:2px;width:10px;height:10px;"></div>Source</div>
+    </div>
+
+    <div class="metric">
+      <div class="metric-label">Score</div>
+      <div class="metric-value" id="m-score">—</div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="score-bar" style="width:0%;background:#25D366;"></div>
+      </div>
+    </div>
+
+    <div class="metric">
+      <div class="metric-label">Model size</div>
+      <div class="metric-value" id="m-model">—</div>
+      <div class="metric-sub" id="m-model-sub">Target: —</div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="model-bar" style="width:100%;background:#ef4444;"></div>
+      </div>
+    </div>
+
+    <div class="metric">
+      <div class="metric-label">Hindi accuracy</div>
+      <div class="metric-value" id="m-hindi">—</div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="hindi-bar" style="width:0%;background:#f59e0b;"></div>
+      </div>
+    </div>
+
+    <div class="metric">
+      <div class="metric-label">Tamil accuracy</div>
+      <div class="metric-value" id="m-tamil">—</div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="tamil-bar" style="width:0%;background:#7c83ff;"></div>
+      </div>
+    </div>
+
+    <div class="metric">
+      <div class="metric-label">Nodes protected</div>
+      <div class="metric-value" id="m-protected">—</div>
+      <div class="metric-sub" id="m-protected-sub">Deploy model to protect phones</div>
+    </div>
+
+    <div class="metric">
+      <div class="metric-label">Sources found</div>
+      <div class="metric-value" id="m-sources">—</div>
+    </div>
+
+    <div class="metric">
+      <div class="metric-label">Last reward</div>
+      <div class="metric-value" id="m-reward">—</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:7860'
+const SESSION = 'demo_' + Math.random().toString(36).slice(2, 8)
+
+let selectedTask = 'task1'
+let selectedAction = 'identify_spreader'
+let nodes = []
+let nodePositions = {}
+let episodeStarted = false
+let currentModelSize = 999
+let currentTargetSize = 80
+
+const ACTIONS = [
+  { type: 'identify_spreader', label: 'Identify spreader', params: [] },
+  { type: 'intercept', label: 'Intercept node', params: ['node'] },
+  { type: 'quarantine', label: 'Quarantine group', params: ['group'] },
+  { type: 'add_forward_label', label: 'Add forward label', params: ['node'] },
+  { type: 'quantize', label: 'Quantize model', params: ['precision'] },
+  { type: 'prune', label: 'Prune model', params: ['prune'] },
+  { type: 'distill', label: 'Distill model', params: ['distill'] },
+  { type: 'deploy', label: 'Deploy to node', params: ['node'] },
+]
+
+async function loadTasks() {
+  const res = await fetch(`${API}/tasks`)
+  const data = await res.json()
+  const list = document.getElementById('task-list')
+  list.innerHTML = ''
+  data.tasks.forEach(t => {
+    const card = document.createElement('div')
+    card.className = 'task-card' + (t.id === selectedTask ? ' active' : '')
+    card.innerHTML = `
+      <div class="diff-badge ${t.difficulty}">${t.difficulty}</div>
+      <div class="task-name">${t.name}</div>
+      <div class="task-meta">${t.total_users} users · ${t.max_turns} turns</div>
+    `
+    card.onclick = () => {
+      if (episodeStarted) return
+      selectedTask = t.id
+      document.querySelectorAll('.task-card').forEach(c => c.classList.remove('active'))
+      card.classList.add('active')
+      document.getElementById('story-box').textContent = t.story
+    }
+    list.appendChild(card)
+  })
+}
+
+function buildActionList() {
+  const list = document.getElementById('action-list')
+  list.innerHTML = ''
+  ACTIONS.forEach(a => {
+    const btn = document.createElement('button')
+    btn.className = 'btn btn-action' + (a.type === selectedAction ? ' selected' : '')
+    btn.textContent = a.label
+    btn.onclick = () => {
+      selectedAction = a.type
+      document.querySelectorAll('.btn-action').forEach(b => b.classList.remove('selected'))
+      btn.classList.add('selected')
+      updateParamVisibility(a.params)
+      const hint = document.getElementById('deploy-hint')
+      if (a.type === 'deploy' && currentModelSize > currentTargetSize) {
+        hint.classList.add('show')
+      } else {
+        hint.classList.remove('show')
+      }
+    }
+    list.appendChild(btn)
+  })
+  updateParamVisibility([])
+}
+
+function updateParamVisibility(params) {
+  const all = ['node', 'group', 'precision', 'prune', 'distill']
+  all.forEach(p => {
+    const el = document.getElementById(`params-${p}`)
+    if (el) el.classList.toggle('show', params.includes(p))
+  })
+}
+
+async function startEpisode() {
+  if (episodeStarted) return
+
+  const res = await fetch(`${API}/reset`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task_id: selectedTask, session_id: SESSION })
+  })
+  const data = await res.json()
+  episodeStarted = true
+
+  document.getElementById('start-screen').style.display = 'none'
+  document.getElementById('done-banner').classList.remove('show')
+
+  const startBtn = document.getElementById('start-btn')
+  startBtn.textContent = '● Episode Running'
+  startBtn.style.background = '#1a1a1a'
+  startBtn.style.color = '#25D366'
+  startBtn.style.border = '1px solid #25D36644'
+
+  updateMetrics(data.observation, null)
+  document.getElementById('story-box').textContent = data.observation.task_story
+  document.getElementById('action-log').innerHTML = ''
+
+  await loadNetworkNodes()
+}
+
+async function resetEpisode() {
+  episodeStarted = false
+  nodes = []
+  nodePositions = {}
+  currentModelSize = 999
+  currentTargetSize = 80
+
+  document.getElementById('start-screen').style.display = 'flex'
+  document.getElementById('done-banner').classList.remove('show')
+  document.getElementById('deploy-hint').classList.remove('show')
+  clearCanvas()
+
+  const startBtn = document.getElementById('start-btn')
+  startBtn.textContent = '▶ Start Episode'
+  startBtn.style.background = '#25D366'
+  startBtn.style.color = '#000'
+  startBtn.style.border = 'none'
+
+  document.getElementById('m-model').style.color = '#fff'
+  document.getElementById('m-score').textContent = '—'
+  document.getElementById('score-bar').style.width = '0%'
+  document.getElementById('pill-infected').textContent = 'Infected: —'
+  document.getElementById('pill-clean').textContent = 'Clean: —'
+  document.getElementById('pill-blocked').textContent = 'Blocked: —'
+  document.getElementById('pill-turn').textContent = 'Turn: —'
+  document.getElementById('turn-bar').textContent = 'Select a task and start an episode'
+}
+
+async function loadNetworkNodes() {
+  const res = await fetch(`${API}/network/nodes?session_id=${SESSION}`)
+  const data = await res.json()
+  nodes = data.nodes
+
+  const wrap = document.getElementById('canvas-wrap')
+  const canvas = document.getElementById('network-canvas')
+  canvas.width = wrap.offsetWidth
+  canvas.height = wrap.offsetHeight
+
+  computeLayout(nodes, canvas.width, canvas.height)
+  drawNetwork(nodes, canvas)
+  updatePills(data.summary)
+}
+
+function computeLayout(nodes, W, H) {
+  const groups = {}
+  nodes.forEach(n => {
+    if (!groups[n.group_id]) groups[n.group_id] = []
+    groups[n.group_id].push(n.id)
+  })
+
+  const groupIds = Object.keys(groups)
+  const numGroups = groupIds.length
+  const cx = W / 2
+  const cy = H / 2
+  const radius = Math.min(W, H) * 0.32
+
+  groupIds.forEach((gid, gi) => {
+    const angle = (gi / numGroups) * Math.PI * 2 - Math.PI / 2
+    const gx = cx + radius * Math.cos(angle)
+    const gy = cy + radius * Math.sin(angle)
+    const members = groups[gid]
+    const innerR = Math.min(50, members.length * 6)
+
+    members.forEach((nid, ni) => {
+      const a2 = (ni / members.length) * Math.PI * 2
+      nodePositions[nid] = {
+        x: gx + innerR * Math.cos(a2),
+        y: gy + innerR * Math.sin(a2)
+      }
+    })
+  })
+}
+
+function drawNetwork(nodes, canvas) {
+  const ctx = canvas.getContext('2d')
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+  const drawn = new Set()
+  nodes.forEach(node => {
+    const pos = nodePositions[node.id]
+    if (!pos) return
+    node.connections.slice(0, 4).forEach(cid => {
+      const key = [Math.min(node.id, cid), Math.max(node.id, cid)].join('-')
+      if (drawn.has(key)) return
+      drawn.add(key)
+      const cpos = nodePositions[cid]
+      if (!cpos) return
+      ctx.beginPath()
+      ctx.moveTo(pos.x, pos.y)
+      ctx.lineTo(cpos.x, cpos.y)
+      ctx.strokeStyle = '#1a1a1a'
+      ctx.lineWidth = 0.5
+      ctx.stroke()
+    })
+  })
+
+  nodes.forEach(node => {
+    const pos = nodePositions[node.id]
+    if (!pos) return
+
+    let color = '#25D366'
+    if (node.status === 'infected') color = '#ef4444'
+    if (node.status === 'blocked') color = '#333'
+
+    let size = 4
+    if (node.is_super_spreader) size = 8
+    if (node.is_source) size = 9
+
+    if (node.is_super_spreader && node.status === 'infected') {
+      ctx.beginPath()
+      ctx.arc(pos.x, pos.y, size + 4, 0, Math.PI * 2)
+      ctx.fillStyle = '#f59e0b22'
+      ctx.fill()
+    }
+
+    if (node.is_source) {
+      ctx.beginPath()
+      ctx.arc(pos.x, pos.y, size + 5, 0, Math.PI * 2)
+      ctx.fillStyle = '#7c83ff22'
+      ctx.fill()
+    }
+
+    ctx.beginPath()
+    ctx.arc(pos.x, pos.y, size, 0, Math.PI * 2)
+    ctx.fillStyle = color
+    ctx.fill()
+
+    if (node.is_super_spreader) {
+      ctx.beginPath()
+      ctx.arc(pos.x, pos.y, size, 0, Math.PI * 2)
+      ctx.strokeStyle = '#f59e0b'
+      ctx.lineWidth = 1.5
+      ctx.stroke()
+    }
+
+    if (node.is_source) {
+      ctx.beginPath()
+      ctx.arc(pos.x, pos.y, size, 0, Math.PI * 2)
+      ctx.strokeStyle = '#7c83ff'
+      ctx.lineWidth = 2
+      ctx.stroke()
+    }
+  })
+}
+
+function clearCanvas() {
+  const canvas = document.getElementById('network-canvas')
+  const ctx = canvas.getContext('2d')
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+}
+
+function buildAction() {
+  const action = { type: selectedAction }
+  if (['intercept', 'deploy', 'add_forward_label'].includes(selectedAction)) {
+    action.node_id = parseInt(document.getElementById('input-node-id').value)
+  }
+  if (selectedAction === 'quarantine') {
+    action.group_id = parseInt(document.getElementById('input-group-id').value)
+  }
+  if (selectedAction === 'quantize') {
+    action.precision = document.getElementById('input-precision').value
+  }
+  if (selectedAction === 'prune') {
+    action.target_layer = document.getElementById('input-layer').value
+    action.percentage = parseInt(document.getElementById('input-percentage').value)
+  }
+  if (selectedAction === 'distill') {
+    action.student_size = document.getElementById('input-student').value
+  }
+  return action
+}
+
+async function takeAction() {
+  if (!episodeStarted) {
+    alert('Start an episode first')
+    return
+  }
+
+  const action = buildAction()
+
+  if (action.type === 'deploy' && currentModelSize > currentTargetSize) {
+    addLogError(`Deploy failed — model is ${currentModelSize}mb, target is ${currentTargetSize}mb. Compress more first.`)
+    document.getElementById('deploy-hint').classList.add('show')
+    return
+  }
+
+  const res = await fetch(`${API}/step`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, session_id: SESSION })
+  })
+  const data = await res.json()
+  const obs = data.observation
+
+  updateMetrics(obs, data.reward)
+  addLog(action.type, data.reward, obs)
+
+  await loadNetworkNodes()
+
+  if (data.done) {
+    const gradeRes = await fetch(`${API}/grade?session_id=${SESSION}`)
+    const grade = await gradeRes.json()
+    showDone(grade)
+  }
+}
+
+function updateMetrics(obs, reward) {
+  currentModelSize = obs.model_size_mb
+  currentTargetSize = obs.target_size_mb
+
+  document.getElementById('m-model').textContent = obs.model_size_mb + ' mb'
+  document.getElementById('m-model').style.color = obs.model_ready_to_deploy ? '#25D366' : '#fff'
+  document.getElementById('m-model-sub').textContent = obs.model_ready_to_deploy
+    ? `✓ Ready to deploy (target: ${obs.target_size_mb}mb)`
+    : `Target: ${obs.target_size_mb}mb — compress more`
+  document.getElementById('m-model-sub').style.color = obs.model_ready_to_deploy ? '#25D366' : '#555'
+
+  document.getElementById('m-hindi').textContent = (obs.hindi_accuracy * 100).toFixed(1) + '%'
+  document.getElementById('m-tamil').textContent = (obs.tamil_accuracy * 100).toFixed(1) + '%'
+  document.getElementById('m-protected').textContent = obs.nodes_protected
+  document.getElementById('m-sources').textContent = `${obs.sources_found} / ${obs.total_sources}`
+
+  if (reward !== null) {
+    document.getElementById('m-reward').textContent = (reward >= 0 ? '+' : '') + reward
+    document.getElementById('m-reward').style.color = reward >= 0 ? '#25D366' : '#ef4444'
+  }
+
+  const modelPct = Math.min(100, (obs.model_size_mb / obs.target_size_mb) * 50)
+  document.getElementById('model-bar').style.width = modelPct + '%'
+  document.getElementById('model-bar').style.background = obs.model_ready_to_deploy ? '#25D366' : '#ef4444'
+
+  document.getElementById('hindi-bar').style.width = (obs.hindi_accuracy * 100) + '%'
+  document.getElementById('tamil-bar').style.width = (obs.tamil_accuracy * 100) + '%'
+
+  document.getElementById('turn-bar').textContent = `Turn ${obs.turn} / ${obs.max_turns}`
+  document.getElementById('pill-turn').textContent = `Turn: ${obs.turn}/${obs.max_turns}`
+
+  if (selectedAction === 'deploy') {
+    const hint = document.getElementById('deploy-hint')
+    if (obs.model_ready_to_deploy) {
+      hint.classList.remove('show')
+    } else {
+      hint.classList.add('show')
+    }
+  }
+}
+
+function updatePills(summary) {
+  document.getElementById('pill-infected').textContent = `Infected: ${summary.infected}`
+  document.getElementById('pill-clean').textContent = `Clean: ${summary.clean}`
+  document.getElementById('pill-blocked').textContent = `Blocked: ${summary.blocked}`
+}
+
+function addLog(actionType, reward, obs) {
+  const log = document.getElementById('action-log')
+  const entry = document.createElement('div')
+  entry.className = 'log-entry' + (reward < 0 ? ' bad' : '')
+  entry.innerHTML = `<span>${actionType}</span> → reward ${reward >= 0 ? '+' : ''}${reward} · infected ${obs.infected}`
+  log.insertBefore(entry, log.firstChild)
+}
+
+function addLogError(message) {
+  const log = document.getElementById('action-log')
+  const entry = document.createElement('div')
+  entry.className = 'log-entry error'
+  entry.innerHTML = `<span>✗ ${message}</span>`
+  log.insertBefore(entry, log.firstChild)
+}
+
+function showDone(grade) {
+  const banner = document.getElementById('done-banner')
+  banner.classList.add('show')
+  if (!grade.passed) banner.classList.add('failed')
+  document.getElementById('done-title').textContent = grade.passed ? '✓ Episode Passed' : '✗ Episode Failed'
+  document.getElementById('done-score').textContent = grade.final_score.toFixed(3)
+  document.getElementById('done-score').style.color = grade.passed ? '#25D366' : '#ef4444'
+  document.getElementById('done-msg').textContent = grade.feedback
+  document.getElementById('m-score').textContent = grade.final_score.toFixed(3)
+  document.getElementById('score-bar').style.width = (grade.final_score * 100) + '%'
+}
+
+window.addEventListener('resize', () => {
+  if (nodes.length > 0) {
+    const wrap = document.getElementById('canvas-wrap')
+    const canvas = document.getElementById('network-canvas')
+    canvas.width = wrap.offsetWidth
+    canvas.height = wrap.offsetHeight
+    computeLayout(nodes, canvas.width, canvas.height)
+    drawNetwork(nodes, canvas)
+  }
+})
+
+loadTasks()
+buildActionList()
+</script>
+</body>
+</html>
