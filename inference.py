@@ -1,47 +1,69 @@
 """
 Inference Script — IndiaShield-v1
 ===================================
-Baseline agent that runs an LLM against the IndiaShield environment.
+MANDATORY
+- Before submitting, ensure the following variables are defined:
+    API_BASE_URL   The API endpoint for the LLM.
+    MODEL_NAME     The model identifier to use for inference.
+    HF_TOKEN       Your Hugging Face / API key.
 
-Required environment variables:
-    API_BASE_URL   The API endpoint for the LLM
-    MODEL_NAME     The model identifier to use
-    HF_TOKEN       Your Hugging Face / API key
+- The inference script must be named `inference.py` and placed in the root directory
+- Participants must use OpenAI Client for all LLM calls using above variables
 """
 
 import os
 import json
 import re
-import time
-from typing import Dict, Any, Optional
+from typing import List, Optional
 from openai import OpenAI
 from indiashield.env import IndiaShieldEnv, Action
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY", "dummy_key")
-MODEL_NAME = os.getenv("MODEL_NAME", "meta-llama/Llama-3.2-3B-Instruct")
+MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-7B-Instruct")
+BENCHMARK = "indiashield-v1"
 MAX_STEPS = 15
 TEMPERATURE = 0.2
 MAX_TOKENS = 300
+SUCCESS_SCORE_THRESHOLD = 0.5
 
-client = OpenAI(
-    base_url=API_BASE_URL,
-    api_key=API_KEY
-)
+client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+
+
+def log_start(task: str, env: str, model: str) -> None:
+    print(f"[START] task={task} env={env} model={model}", flush=True)
+
+
+def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
+    error_val = error if error else "null"
+    done_val = str(done).lower()
+    print(
+        f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}",
+        flush=True,
+    )
+
+
+def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
+    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    print(
+        f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}",
+        flush=True,
+    )
+
 
 SYSTEM_PROMPT = """You are an AI agent controlling IndiaShield — a system that:
 1. Contains WhatsApp misinformation outbreaks in India
 2. Compresses a multilingual AI classifier for deployment on cheap phones
 
-Each turn you must choose exactly one action from this list:
+Each turn choose exactly one action from this list:
 
-NETWORK ACTIONS (fight the spread):
-- {"type": "identify_spreader"} — find the biggest spreader (costs 1 turn)
+NETWORK ACTIONS:
+- {"type": "identify_spreader"} — find the biggest spreader
 - {"type": "intercept", "node_id": <int>} — block one infected node
 - {"type": "quarantine", "group_id": <int>} — block entire group
 - {"type": "add_forward_label", "node_id": <int>} — mark message as forwarded
 
-MODEL ACTIONS (shrink the classifier):
+MODEL ACTIONS:
 - {"type": "quantize", "precision": "int8"} — shrink 55%, small accuracy loss
 - {"type": "quantize", "precision": "int4"} — shrink 72%, large accuracy loss
 - {"type": "prune", "target_layer": "ffn", "percentage": 30} — safe pruning
@@ -50,47 +72,42 @@ MODEL ACTIONS (shrink the classifier):
 - {"type": "distill", "student_size": "small"} — best compression, takes 2 turns
 - {"type": "distill", "student_size": "tiny"} — smallest model, takes 3 turns
 
-DEPLOYMENT ACTION:
-- {"type": "deploy", "node_id": <int>} — install model on one phone (only works if model is small enough)
+DEPLOYMENT:
+- {"type": "deploy", "node_id": <int>} — install model on phone (only if model is small enough)
 
-STRATEGY TIPS:
-- Balance network actions AND model compression every episode
+STRATEGY:
 - Compress model early so you can deploy later
-- intercept super spreaders first — they have the most connections
-- deploy to as many nodes as possible once model is small enough
-- do NOT waste turns on noop
+- Intercept super spreaders first — they have most connections
+- Balance network actions AND model compression every episode
+- Deploy to as many nodes as possible once model is small enough
 
-Respond with ONLY a JSON action object. Nothing else. No explanation."""
+Respond with ONLY a JSON action object. Nothing else."""
 
 
-def build_prompt(obs: Dict[str, Any], turn: int) -> str:
+def build_prompt(obs: dict, turn: int) -> str:
     infected_pct = round(obs["infected"] / obs["total_users"] * 100, 1)
     size_gap = round(obs["model_size_mb"] - obs["target_size_mb"], 1)
-
-    prompt = f"""TURN {turn}/{obs['max_turns']} — {obs['task_name']}
+    return f"""TURN {turn}/{obs['max_turns']} — {obs['task_name']}
 
 NETWORK STATUS:
 - Infected: {obs['infected']}/{obs['total_users']} ({infected_pct}%)
-- Blocked: {obs['blocked']}
 - Sources found: {obs['sources_found']}/{obs['total_sources']}
 - Super spreaders found: {obs['super_spreaders_found']}/{obs['total_super_spreaders']}
 
 MODEL STATUS:
-- Current size: {obs['model_size_mb']}mb (need to get to {obs['target_size_mb']}mb, gap: {size_gap}mb)
+- Size: {obs['model_size_mb']}mb (need {obs['target_size_mb']}mb, gap: {size_gap}mb)
 - Ready to deploy: {obs['model_ready_to_deploy']}
 - Hindi accuracy: {obs['hindi_accuracy']}
 - Tamil accuracy: {obs['tamil_accuracy']}
 - Nodes protected: {obs['nodes_protected']}
 - Distill turns remaining: {obs['distill_turns_remaining']}
 
-LAST ACTION RESULT:
-{json.dumps(obs.get('last_action_result', {}), indent=2)}
+LAST ACTION: {json.dumps(obs.get('last_action_result', {}))}
 
-What is your next action? Reply with JSON only."""
-    return prompt
+Reply with JSON action only."""
 
 
-def parse_action(response_text: str) -> Optional[Action]:
+def parse_action(response_text: str) -> Action:
     response_text = response_text.strip()
     json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
     if not json_match:
@@ -102,87 +119,79 @@ def parse_action(response_text: str) -> Optional[Action]:
         return Action(type="noop")
 
 
-def run_task(task_id: str) -> Dict[str, Any]:
-    print(f"\n{'='*50}")
-    print(f"Running task: {task_id}")
-    print(f"{'='*50}")
-
+def run_task(task_id: str) -> dict:
     env = IndiaShieldEnv(task_id=task_id)
     obs_obj = env.reset()
     obs = obs_obj.model_dump()
 
-    print(f"Story: {obs['task_story'][:80]}...")
-    print(f"Users: {obs['total_users']} | "
-          f"Infected: {obs['infected']} | "
-          f"Model: {obs['model_size_mb']}mb")
-
-    total_reward = 0.0
+    task_name = obs["task_name"]
+    rewards: List[float] = []
+    steps_taken = 0
+    score = 0.0
+    success = False
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-    for step in range(MAX_STEPS):
-        if env.done:
-            break
+    log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
 
-        user_prompt = build_prompt(obs, step + 1)
-        messages.append({"role": "user", "content": user_prompt})
+    try:
+        for step in range(1, MAX_STEPS + 1):
+            if env.done:
+                break
 
-        try:
-            response = client.chat.completions.create(
-                model=MODEL_NAME,
-                messages=messages,
-                temperature=TEMPERATURE,
-                max_tokens=MAX_TOKENS
+            user_prompt = build_prompt(obs, step)
+            messages.append({"role": "user", "content": user_prompt})
+
+            error = None
+            try:
+                response = client.chat.completions.create(
+                    model=MODEL_NAME,
+                    messages=messages,
+                    temperature=TEMPERATURE,
+                    max_tokens=MAX_TOKENS
+                )
+                response_text = response.choices[0].message.content
+                messages.append({"role": "assistant", "content": response_text})
+            except Exception as e:
+                response_text = '{"type": "noop"}'
+                error = str(e)[:100]
+                messages.append({"role": "assistant", "content": response_text})
+
+            action = parse_action(response_text)
+            obs_obj, reward, done, info = env.step(action)
+            obs = obs_obj.model_dump()
+
+            rewards.append(reward)
+            steps_taken = step
+
+            log_step(
+                step=step,
+                action=action.type,
+                reward=reward,
+                done=done,
+                error=error
             )
-            response_text = response.choices[0].message.content
-            messages.append({
-                "role": "assistant",
-                "content": response_text
-            })
-        except Exception as e:
-            print(f"  LLM error on step {step + 1}: {e}")
-            response_text = '{"type": "noop"}'
-            messages.append({
-                "role": "assistant",
-                "content": response_text
-            })
 
-        action = parse_action(response_text)
-        obs_obj, reward, done, info = env.step(action)
-        obs = obs_obj.model_dump()
-        total_reward += reward
+            if done:
+                break
 
-        print(
-            f"  Step {step+1:2d} | "
-            f"Action: {action.type:20s} | "
-            f"Reward: {reward:+.3f} | "
-            f"Infected: {obs['infected']:3d} | "
-            f"Model: {obs['model_size_mb']:6.1f}mb"
-        )
+        result = env.grade()
+        score = float(result.final_score)
+        success = score >= SUCCESS_SCORE_THRESHOLD
 
-        time.sleep(0.5)
-
-    result = env.grade()
-    print(f"\nFinal Score: {result.final_score}")
-    print(f"Passed: {result.passed}")
-    print(f"Breakdown: {result.breakdown}")
-    print(f"Feedback: {result.feedback}")
+    finally:
+        log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
     return {
         "task_id": task_id,
-        "final_score": result.final_score,
-        "passed": result.passed,
-        "total_reward": round(total_reward, 3),
-        "breakdown": result.breakdown,
-        "feedback": result.feedback
+        "final_score": score,
+        "passed": success,
+        "total_reward": round(sum(rewards), 3),
+        "breakdown": result.breakdown if 'result' in dir() else {},
+        "feedback": result.feedback if 'result' in dir() else ""
     }
 
 
 def main():
-    print("IndiaShield-v1 Baseline Inference")
-    print("Model:", MODEL_NAME)
-    print("API:", API_BASE_URL)
-    print()
-
     task_ids = ["task1", "task2", "task3"]
     results = []
 
@@ -190,21 +199,7 @@ def main():
         result = run_task(task_id)
         results.append(result)
 
-    print(f"\n{'='*50}")
-    print("BASELINE SCORES SUMMARY")
-    print(f"{'='*50}")
-    total = 0.0
-    for r in results:
-        print(
-            f"{r['task_id']:8s} | "
-            f"Score: {r['final_score']:.3f} | "
-            f"Passed: {str(r['passed']):5s} | "
-            f"{r['feedback'][:40]}"
-        )
-        total += r["final_score"]
-    avg = round(total / len(results), 3)
-    print(f"\nAverage score across 3 tasks: {avg}")
-    print()
+    avg = round(sum(r["final_score"] for r in results) / len(results), 3)
 
     with open("baseline_scores.json", "w") as f:
         json.dump({
@@ -212,7 +207,9 @@ def main():
             "results": results,
             "average_score": avg
         }, f, indent=2)
-    print("Scores saved to baseline_scores.json")
+
+    print(f"\nAverage score: {avg}", flush=True)
+    print("Scores saved to baseline_scores.json", flush=True)
 
 
 if __name__ == "__main__":
