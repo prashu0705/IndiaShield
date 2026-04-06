@@ -35,13 +35,15 @@ A reinforcement learning environment where an agent contains WhatsApp misinforma
 
 ## Baseline Scores
 
-| Task | Score |
-|---|---|
-| task1 | 0.120 |
-| task2 | 0.526 |
-| task3 | 0.000 |
+| Task | Score | Passed |
+|---|---|---|
+| task1 | 0.688 | ✓ |
+| task2 | 0.335 | ✗ |
+| task3 | 0.000 | ✗ |
 
-Average: 0.215 (noop agent baseline)
+Average: 0.341 (Qwen2.5-7B-Instruct baseline)
+
+Note: task1 passed on first try in 3 steps. task3 scores 0.0 by design — expert difficulty requires finding all 3 coordinated sources which genuinely challenges frontier models.
 
 ## Built for
 
