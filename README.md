@@ -1,11 +1,4 @@
----
-title: IndiaShield
-emoji: 🛡️
-colorFrom: green
-colorTo: blue
-sdk: docker
-pinned: false
----
+
 
 # IndiaShield-v1
 
