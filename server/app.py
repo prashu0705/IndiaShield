@@ -1,8 +1,6 @@
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Any, Dict, List, Optional
 from indiashield.env import IndiaShieldEnv, Action
@@ -22,9 +20,6 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
-@app.get("/demo", include_in_schema=False)
-def demo():
-    return FileResponse("demo.html")
 
 app.add_middleware(
     CORSMiddleware,
@@ -65,45 +60,17 @@ def _get_session(session_id: str) -> IndiaShieldEnv:
     return env
 
 
-class ResetRequest(BaseModel):
-    task_id: str = "task1"
-    session_id: Optional[str] = None
-    seed: Optional[int] = None
-    custom_config: Optional[Dict[str, Any]] = None
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "task_id": "task1",
-                "seed": 42,
-                "custom_config": {
-                    "max_turns": 12
-                }
-            }
-        }
-
-
 class StepRequest(BaseModel):
     action: Dict[str, Any]
     session_id: str = "default"
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "session_id": "my_session",
-                "action": {
-                    "type": "quantize",
-                    "precision": "int8"
-                }
-            }
-        }
+
+@app.get("/demo", include_in_schema=False)
+def demo():
+    return FileResponse("demo.html")
 
 
-@app.get(
-    "/",
-    summary="Environment info",
-    tags=["Info"]
-)
+@app.get("/", summary="Environment info", tags=["Info"])
 def root():
     return {
         "name": "IndiaShield-v1",
@@ -133,11 +100,7 @@ def root():
     }
 
 
-@app.get(
-    "/health",
-    summary="Health check",
-    tags=["Info"]
-)
+@app.get("/health", summary="Health check", tags=["Info"])
 def health():
     return {
         "status": "ok",
@@ -147,11 +110,7 @@ def health():
     }
 
 
-@app.get(
-    "/tasks",
-    summary="List all tasks",
-    tags=["Tasks"]
-)
+@app.get("/tasks", summary="List all tasks", tags=["Tasks"])
 def list_tasks():
     return {
         "tasks": [
@@ -172,50 +131,48 @@ def list_tasks():
     }
 
 
-@app.get(
-    "/tasks/{task_id}",
-    summary="Get one task details",
-    tags=["Tasks"]
-)
+@app.get("/tasks/{task_id}", summary="Get one task details", tags=["Tasks"])
 def get_task_detail(task_id: str):
     task = get_task(task_id)
     if task is None:
         raise HTTPException(
             status_code=404,
-            detail=f"Task '{task_id}' not found. "
-                   f"Valid tasks: task1, task2, task3, task4, task5"
+            detail=f"Task '{task_id}' not found. Valid tasks: task1, task2, task3, task4, task5"
         )
     return task.model_dump()
 
 
-@app.post(
-    "/reset",
-    summary="Start a new episode",
-    tags=["Environment"]
-)
-def reset(request: ResetRequest):
+@app.post("/reset", summary="Start a new episode", tags=["Environment"])
+async def reset(request: Request):
     _cleanup_old_sessions()
 
-    task = get_task(request.task_id)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    task_id = body.get("task_id", "task1")
+    session_id = body.get("session_id", None) or str(uuid.uuid4())
+    seed = body.get("seed", None)
+    custom_config = body.get("custom_config", {})
+
+    task = get_task(task_id)
     if task is None:
         raise HTTPException(
             status_code=400,
-            detail=f"Unknown task_id '{request.task_id}'. "
-                   f"Valid: task1, task2, task3, task4, task5"
+            detail=f"Unknown task_id '{task_id}'. Valid: task1, task2, task3, task4, task5"
         )
 
-    session_id = request.session_id or str(uuid.uuid4())
-
     env = IndiaShieldEnv(
-        task_id=request.task_id,
-        seed=request.seed,
-        custom_config=request.custom_config or {}
+        task_id=task_id,
+        seed=seed,
+        custom_config=custom_config
     )
     sessions[session_id] = env
     session_metadata[session_id] = {
         "created_at": time.time(),
         "last_used": time.time(),
-        "task_id": request.task_id,
+        "task_id": task_id,
         "seed": env.seed
     }
 
@@ -223,7 +180,7 @@ def reset(request: ResetRequest):
     return {
         "session_id": session_id,
         "episode_id": obs.episode_id,
-        "task_id": request.task_id,
+        "task_id": task_id,
         "task_name": obs.task_name,
         "seed": env.seed,
         "observation": obs.model_dump(),
@@ -235,11 +192,7 @@ def reset(request: ResetRequest):
     }
 
 
-@app.post(
-    "/step",
-    summary="Take one action",
-    tags=["Environment"]
-)
+@app.post("/step", summary="Take one action", tags=["Environment"])
 def step(request: StepRequest):
     env = _get_session(request.session_id)
 
@@ -248,10 +201,7 @@ def step(request: StepRequest):
     except Exception as e:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid action: {str(e)}. "
-                   f"Valid action types: intercept, quarantine, "
-                   f"identify_spreader, add_forward_label, quantize, "
-                   f"prune, distill, deploy, noop"
+            detail=f"Invalid action: {str(e)}."
         )
 
     obs, reward, done, info = env.step(action)
@@ -263,58 +213,35 @@ def step(request: StepRequest):
     }
 
 
-@app.get(
-    "/state",
-    summary="Get current state",
-    tags=["Environment"]
-)
+@app.get("/state", summary="Get current state", tags=["Environment"])
 def state(session_id: str = Query(default="default")):
     env = _get_session(session_id)
     return env.state()
 
 
-@app.get(
-    "/grade",
-    summary="Get current score",
-    tags=["Environment"]
-)
+@app.get("/grade", summary="Get current score", tags=["Environment"])
 def grade(session_id: str = Query(default="default")):
     env = _get_session(session_id)
     result = env.grade()
     return result.model_dump()
 
 
-@app.get(
-    "/stats",
-    summary="Get episode statistics",
-    tags=["Environment"]
-)
+@app.get("/stats", summary="Get episode statistics", tags=["Environment"])
 def stats(session_id: str = Query(default="default")):
     env = _get_session(session_id)
     return env.get_stats().model_dump()
 
 
-@app.delete(
-    "/session/{session_id}",
-    summary="Delete a session",
-    tags=["Environment"]
-)
+@app.delete("/session/{session_id}", summary="Delete a session", tags=["Environment"])
 def delete_session(session_id: str):
     if session_id not in sessions:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Session '{session_id}' not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
     sessions.pop(session_id)
     session_metadata.pop(session_id, None)
     return {"message": f"Session '{session_id}' deleted"}
 
 
-@app.get(
-    "/sessions",
-    summary="List active sessions",
-    tags=["Info"]
-)
+@app.get("/sessions", summary="List active sessions", tags=["Info"])
 def list_sessions():
     return {
         "active_sessions": len(sessions),
@@ -333,87 +260,24 @@ def list_sessions():
     }
 
 
-@app.get(
-    "/actions",
-    summary="List all valid actions with examples",
-    tags=["Info"]
-)
+@app.get("/actions", summary="List all valid actions", tags=["Info"])
 def list_actions():
     return {
         "actions": [
-            {
-                "type": "intercept",
-                "description": "Block one infected node from spreading",
-                "params": {"node_id": "int"},
-                "example": {"type": "intercept", "node_id": 42}
-            },
-            {
-                "type": "quarantine",
-                "description": "Block an entire group from spreading",
-                "params": {"group_id": "int"},
-                "example": {"type": "quarantine", "group_id": 3}
-            },
-            {
-                "type": "identify_spreader",
-                "description": "Find the highest-risk infected node",
-                "params": {},
-                "example": {"type": "identify_spreader"}
-            },
-            {
-                "type": "add_forward_label",
-                "description": "Mark message as forwarded many times — cuts spread 60%",
-                "params": {"node_id": "int"},
-                "example": {"type": "add_forward_label", "node_id": 7}
-            },
-            {
-                "type": "quantize",
-                "description": "Shrink model by reducing math precision",
-                "params": {"precision": "int8 | int4"},
-                "example": {"type": "quantize", "precision": "int8"}
-            },
-            {
-                "type": "prune",
-                "description": "Cut unused model weights",
-                "params": {
-                    "target_layer": "attention | ffn | all",
-                    "percentage": "int 0-70"
-                },
-                "example": {
-                    "type": "prune",
-                    "target_layer": "ffn",
-                    "percentage": 30
-                }
-            },
-            {
-                "type": "distill",
-                "description": "Rebuild into tiny student model",
-                "params": {"student_size": "small | tiny"},
-                "example": {
-                    "type": "distill",
-                    "student_size": "small"
-                }
-            },
-            {
-                "type": "deploy",
-                "description": "Install compressed model on one phone",
-                "params": {"node_id": "int"},
-                "example": {"type": "deploy", "node_id": 15}
-            },
-            {
-                "type": "noop",
-                "description": "Do nothing — penalised",
-                "params": {},
-                "example": {"type": "noop"}
-            }
+            {"type": "intercept", "description": "Block one infected node", "example": {"type": "intercept", "node_id": 42}},
+            {"type": "quarantine", "description": "Block entire group", "example": {"type": "quarantine", "group_id": 3}},
+            {"type": "identify_spreader", "description": "Find highest-risk node", "example": {"type": "identify_spreader"}},
+            {"type": "add_forward_label", "description": "Mark message as forwarded", "example": {"type": "add_forward_label", "node_id": 7}},
+            {"type": "quantize", "description": "Shrink model by reducing precision", "example": {"type": "quantize", "precision": "int8"}},
+            {"type": "prune", "description": "Cut unused model weights", "example": {"type": "prune", "target_layer": "ffn", "percentage": 30}},
+            {"type": "distill", "description": "Rebuild into tiny student model", "example": {"type": "distill", "student_size": "small"}},
+            {"type": "deploy", "description": "Install model on phone", "example": {"type": "deploy", "node_id": 15}},
+            {"type": "noop", "description": "Do nothing — penalised", "example": {"type": "noop"}}
         ]
     }
 
 
-@app.get(
-    "/network/nodes",
-    summary="Get all nodes with their current status",
-    tags=["Environment"]
-)
+@app.get("/network/nodes", summary="Get all nodes", tags=["Environment"])
 def get_nodes(session_id: str = Query(default="default")):
     env = _get_session(session_id)
     nodes = []
@@ -443,21 +307,16 @@ def get_nodes(session_id: str = Query(default="default")):
             "spread_multiplier": group.spread_multiplier,
             "skepticism": group.skepticism
         })
-    net_state = env.network.get_state()
     return {
         "session_id": session_id,
         "turn": env.turn,
         "nodes": nodes,
         "groups": groups,
-        "summary": net_state.model_dump()
+        "summary": env.network.get_state().model_dump()
     }
 
 
-@app.get(
-    "/network/infected",
-    summary="Get only infected nodes — lighter call for polling",
-    tags=["Environment"]
-)
+@app.get("/network/infected", summary="Get infected nodes", tags=["Environment"])
 def get_infected_nodes(session_id: str = Query(default="default")):
     env = _get_session(session_id)
     infected = [
@@ -492,6 +351,7 @@ def get_infected_nodes(session_id: str = Query(default="default")):
         "infected_count": len(infected),
         "blocked_count": len(blocked)
     }
+
 
 def main():
     import uvicorn
