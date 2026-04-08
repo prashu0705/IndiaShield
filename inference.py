@@ -17,11 +17,6 @@ import re
 from typing import Any, List, Optional
 from indiashield.env import IndiaShieldEnv, Action
 
-try:
-    from openai import OpenAI
-except Exception:
-    OpenAI = None
-
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY", "dummy_key")
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-7B-Instruct")
@@ -33,10 +28,8 @@ SUCCESS_SCORE_THRESHOLD = 0.5
 
 
 def get_client() -> Optional[Any]:
-    if OpenAI is None:
-        return None
-
     try:
+        from openai import OpenAI
         return OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
     except Exception as exc:
         print(f"[WARN] OpenAI client init failed: {str(exc)[:120]}", flush=True)
