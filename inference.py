@@ -14,9 +14,13 @@ MANDATORY
 import os
 import json
 import re
-from typing import List, Optional
-from openai import OpenAI
+from typing import Any, List, Optional
 from indiashield.env import IndiaShieldEnv, Action
+
+try:
+    from openai import OpenAI
+except Exception:
+    OpenAI = None
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY", "dummy_key")
@@ -27,7 +31,16 @@ TEMPERATURE = 0.2
 MAX_TOKENS = 300
 SUCCESS_SCORE_THRESHOLD = 0.5
 
-client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+
+def get_client() -> Optional[Any]:
+    if OpenAI is None:
+        return None
+
+    try:
+        return OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+    except Exception as exc:
+        print(f"[WARN] OpenAI client init failed: {str(exc)[:120]}", flush=True)
+        return None
 
 
 def log_start(task: str, env: str, model: str) -> None:
@@ -123,8 +136,8 @@ def run_task(task_id: str) -> dict:
     env = IndiaShieldEnv(task_id=task_id)
     obs_obj = env.reset()
     obs = obs_obj.model_dump()
+    client = get_client()
 
-    task_name = obs["task_name"]
     rewards: List[float] = []
     steps_taken = 0
     score = 0.0
@@ -142,19 +155,24 @@ def run_task(task_id: str) -> dict:
             messages.append({"role": "user", "content": user_prompt})
 
             error = None
-            try:
-                response = client.chat.completions.create(
-                    model=MODEL_NAME,
-                    messages=messages,
-                    temperature=TEMPERATURE,
-                    max_tokens=MAX_TOKENS
-                )
-                response_text = response.choices[0].message.content
-                messages.append({"role": "assistant", "content": response_text})
-            except Exception as e:
+            if client is None:
                 response_text = '{"type": "noop"}'
-                error = str(e)[:100]
+                error = "OpenAI client unavailable"
                 messages.append({"role": "assistant", "content": response_text})
+            else:
+                try:
+                    response = client.chat.completions.create(
+                        model=MODEL_NAME,
+                        messages=messages,
+                        temperature=TEMPERATURE,
+                        max_tokens=MAX_TOKENS
+                    )
+                    response_text = response.choices[0].message.content or '{"type": "noop"}'
+                    messages.append({"role": "assistant", "content": response_text})
+                except Exception as e:
+                    response_text = '{"type": "noop"}'
+                    error = str(e)[:100]
+                    messages.append({"role": "assistant", "content": response_text})
 
             action = parse_action(response_text)
             obs_obj, reward, done, info = env.step(action)
