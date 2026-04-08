@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Inference Script — IndiaShield-v1
 ===================================
@@ -28,9 +29,13 @@ SUCCESS_SCORE_THRESHOLD = 0.5
 
 
 def get_client() -> Optional[Any]:
+    """Create an OpenAI client if the module is available, otherwise return None."""
     try:
         from openai import OpenAI
         return OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+    except ImportError:
+        print("[WARN] openai module not installed. Falling back to noop actions.", flush=True)
+        return None
     except Exception as exc:
         print(f"[WARN] OpenAI client init failed: {str(exc)[:120]}", flush=True)
         return None
@@ -150,7 +155,7 @@ def run_task(task_id: str) -> dict:
             error = None
             if client is None:
                 response_text = '{"type": "noop"}'
-                error = "OpenAI client unavailable"
+                error = "OpenAI client unavailable (openai module missing)"
                 messages.append({"role": "assistant", "content": response_text})
             else:
                 try:
